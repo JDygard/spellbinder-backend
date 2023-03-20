@@ -1,9 +1,17 @@
 const { generateBoard, randomLetter, validateWord, letterRarity } = require('./game-utils');
 const { authenticateSocket } = require('./auth');
+var userArray = [];
 
 const setupSocket = (io, authenticateSocket) => {
+    console.log(authenticateSocket);
     io.use(authenticateSocket).on('connection', (socket) => {
         console.log('A user connected:', socket.id);
+        
+        userArray.push(socket.user.username);
+
+        socket.on("requestPlayerData", () => {
+            console.log("Requesting player data...");
+        });
 
         socket.on('generateBoard', (size) => {
             const newBoard = generateBoard(size);

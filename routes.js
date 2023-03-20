@@ -5,6 +5,13 @@ const { createUser } = require('./dynamo-db.js'); // Add this import
 
 const router = express.Router();
 
+const dotenv = require('dotenv');
+dotenv.config();
+
+const {
+  JWT_SECRET,
+} = process.env;
+
 router.post('/register', async (req, res) => {
     try {
         const userData = {
@@ -20,7 +27,7 @@ router.post('/register', async (req, res) => {
 });
 
 router.post('/login', passport.authenticate('local', { session: false }), (req, res) => {
-    const token = jwt.sign({ id: req.user.id }, 'your_jwt_secret', {
+    const token = jwt.sign({ id: req.user.id }, JWT_SECRET, {
       expiresIn: '1h',
     });
     const userToSend = {

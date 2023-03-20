@@ -42,6 +42,7 @@ const authenticateSocket = (socket, next) => {
   if (socket.handshake.query && socket.handshake.query.token) {
     jwt.verify(socket.handshake.query.token, JWT_SECRET, (err, decoded) => {
       if (err) {
+        console.log('Socket authentication error:', err); // Log the error
         return next(new Error('Authentication error'));
       }
       socket.user = decoded;
