@@ -12,19 +12,23 @@ const keyGenerator = () => {
 
 const randomLetter = () => letterFrequency[Math.floor(Math.random() * letterFrequency.length)];
 
+const keyGen = keyGenerator();
+
 const generateBoard = (size) => {
-  // This return statement is fine, but I would like for every letter to be generated as an object with a key and saved in a list.
-  // then I'd like to return it as an array of objects.
-  let randomLetters = [];
+  const board = [];
   for (let i = 0; i < size; i++) {
-    let newRandomLetter = {
-      letter: randomLetter(),
-      key: keyGenerator(),
-      effect: '',
+    const row = [];
+    for (let j = 0; j < size; j++) {
+      let newRandomLetter = {
+        letter: randomLetter(),
+        key: keyGen(),
+        effect: "",
+      };
+      row.push(newRandomLetter);
     }
-    randomLetters.push(newRandomLetter);
+    board.push(row);
   }
-  return randomLetters;
+  return board;
 };
 
 const letterRarity = (letter) => {

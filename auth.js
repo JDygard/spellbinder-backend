@@ -31,6 +31,9 @@ const authenticateJWT = (req, res, next) => {
   const token = req.headers.authorization.split(' ')[1];
   jwt.verify(token, JWT_SECRET, (err, user) => {
     if (err) {
+      if (err instanceof jwt.TokenExpiredError) {
+        return res.status(401).json({ error: 'Token expired' });
+      }
       return res.sendStatus(403);
     }
     req.user = user;
@@ -40,6 +43,7 @@ const authenticateJWT = (req, res, next) => {
 
 const authenticateSocket = (socket, next) => {
   if (socket.handshake.query && socket.handshake.query.token) {
+    console.log(socket.handshake.query.token)
     jwt.verify(socket.handshake.query.token, JWT_SECRET, (err, decoded) => {
       if (err) {
         console.log('Socket authentication error:', err); // Log the error

@@ -9,6 +9,12 @@ const setupSocket = (io, authenticateSocket) => {
         
         userArray.push(socket.user.username);
 
+        socket.on('requestPVEData', () => {
+            console.log("Requesting PVE data...");
+            // Generate and send PVE-specific data to the client
+            socket.emit('playerData', { pveData: 'Sample PVE data' });
+          });
+
         socket.on("requestPlayerData", () => {
             console.log("Requesting player data...");
         });
