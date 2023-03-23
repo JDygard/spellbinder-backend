@@ -29,6 +29,9 @@ const fakePlayerData = [{
 const { generateBoard, randomLetter, validateWord, letterRarity } = require('./game-utils');
 const { getCharactersByUsername, createCharacter } = require('./dynamo-db');
 const { authenticateSocket } = require('./auth');
+const { callCreatures, getChallengeSummary } = require('./gameController');
+const challenges = require('./data/challenges');
+const monsters = require('./data/monsters');
 
 class User {
     constructor(id, username, currentCharacter = null, gameState = 'idle', inMatch = false, board = []) {
@@ -82,6 +85,11 @@ const setupSocket = (io, authenticateSocket) => {
             // Generate and send PVE-specific data to the client
             socket.emit('playerData', { pveData: 'Sample PVE data' });
         });
+
+        socket.on('requestChallengeList', () => {
+            console.log(getChallengeSummary(challenges))
+            socket.emit('challengeList', getChallengeSummary(challenges));
+          });
 
         socket.on("requestPlayerData", () => {
             socket.emit("playerData", { playerData: fakePlayerData });

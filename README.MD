@@ -1,268 +1,227 @@
-You were out for a while there! Now back to work.
+Let's start at the beginning, with #1: "Define challenge structure"
 
-I think we are going to pivot to getting the backend working delivering a user and characters to the frontend. Since this is going to be a multiplayer game, I'd also like some information on how we're going to keep separate connected users and have them able to interact with each other. Below, I'll paste in some of our backend code for you to remember while we work on this:
+The PvE window is a "tree of choices" style popularized in indie roguelike games similar to "slay the spire." Each "room" on the tree has a random encounter based on which room type it is: healing room, normal monster, strong monster.
 
-dynamo-db.js:
-const AWS = require('aws-sdk');
-const dotenv = require('dotenv');
-const bcrypt = require('bcrypt');
-dotenv.config();
+The healing room always provides a boost to the player's remaining hp.
 
-const {
-  AWS_ACCESS_KEY_ID,
-  AWS_SECRET_ACCESS_KEY,
-  AWS_REGION,
-  TABLE_NAME,
-} = process.env;
+The normal monster room should pull from a list of normal monsters.
 
-AWS.config.update({
-  accessKeyId: AWS_ACCESS_KEY_ID,
-  secretAccessKey: AWS_SECRET_ACCESS_KEY,
-  region: AWS_REGION,
-});
+The strong monster room should pull from another list of stronger monsters.
 
-const docClient = new AWS.DynamoDB.DocumentClient();
+The tree culminates in a final boss monster.
 
-const getUserByUsername = async (username) => {
-  const params = {
-    TableName: TABLE_NAME,
-    IndexName: 'username-index',
-    KeyConditionExpression: 'username = :u',
-    ExpressionAttributeValues: {
-      ':u': username,
+The monsters attack the player using a list of abilities, inflicting damage or causing negative tile effects or both.
+
+There should be a list of challenges, each with a name, tree structure, and enemy list.
+The first challenge might look like this:
+{
+    name: "challenge 1",
+    tree: {
+        id: 1,
+        type: "healing",
+        next: {
+            id: 2,
+            type: "normal",
+            next: {
+                id: 3,
+                type: "strong",
+                next: {
+                    id: 4,
+                    type: "boss",
+                    next: null
+                }// I would prefer a structure that lets the tree branch
+            }
+        }
     },
-  };
-
-  try {
-    const result = await docClient.query(params).promise();
-    return result.Items.length ? result.Items[0] : null;
-  } catch (error) {
-    console.error(error);
-    throw error;
-  }
-};
-
-const createUser = async (userData) => {
-  const hashedPassword = await bcrypt.hash(userData.password, 10);
-  const params = {
-    TableName: TABLE_NAME,
-    Item: {
-      id: new Date().getTime().toString(),
-      username: userData.username,
-      password: hashedPassword,
-    },
-  };
-
-  try {
-    await docClient.put(params).promise();
-    return params.Item;
-  } catch (error) {
-    console.error(error);
-    throw error;
-  }
-};
-
-const validatePassword = async (user, password) => {
-  try {
-    const hashedPassword = user.password; // Extract the hashed password from the user object
-    const isValid = await bcrypt.compare(password, hashedPassword);
-    return isValid;
-  } catch (error) {
-    console.error(error);
-    throw error;
-  }
-};
-
-module.exports = {
-  getUserByUsername,
-  createUser,
-  validatePassword,
-};
-
-game-utils.js:
-const letterFrequency = "EEEEEEEEEEEEEEEEEEEAAAAAAAAAAIIIIIIIIINNNNNNNOOOOOOOOTTTTTTTRRRRRRSSSSSLLLLLCCCCCUUUUUDMMMMPHFFBBGYWKVJXQZ";
-
-const randomLetter = () => letterFrequency[Math.floor(Math.random() * letterFrequency.length)];
-
-const generateBoard = (size) => {
-  return Array.from({ length: size }, () => Array.from({ length: size }, () => randomLetter()));
-};
-
-const letterRarity = (letter) => {
-    const commonLetters = 'ETAONRIS';
-    const rareLetters = 'JKQXZ';
-  
-    if (commonLetters.includes(letter)) {
-      return { value: 1, color: 'copper' };
-    } else if (rareLetters.includes(letter)) {
-      return { value: 3, color: 'gold' };
-    } else {
-      return { value: 2, color: 'silver' };
+    enemies: {
+        normal: [
+            {
+                id: 1,
+                name: "goblin",
+                hp: 10,
+                abilities: [1, 2, 3]
+            },
+            {
+                id: 2,
+                name: "orc",
+                hp: 15,
+                abilities: [1, 2, 3]
+            },
+            {
+                id: 3,
+                name: "troll",
+                hp: 20,
+                abilities: [1, 2, 3]
+            }
+        ],
+        strong: [
+            {
+                id: 1,
+                name: "goblin chief",
+                hp: 20,
+                abilities: [1, 2, 3]
+            },
+            {
+                id: 2,
+                name: "orc chief",
+                hp: 25,
+                abilities: [1, 2, 3]
+            },
+            {
+                id: 3,
+                name: "troll chief",
+                hp: 30,
+                abilities: [1, 2, 3]
+            }
+        ],
+        boss: [
+            {
+                id: 1,
+                name: "goblin king",
+                hp: 30,
+                abilities: [1, 2, 3]
+            },
+            {
+                id: 2,
+                name: "orc king",
+                hp: 35,
+                abilities: [1, 2, 3]
+            },
+            {
+                id: 3,
+                name: "troll king",
+                hp: 40,
+                abilities: [1, 2, 3]
+            }
+        ]
     }
-  };
+}
 
-const validateWord = async (word) => {
-    try {
-        const fetchModule = await import("node-fetch");
-        const fetch = fetchModule.default;
-        const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
-      if (response.ok) {
-        const data = await response.json();
-        return data.length > 0;
-      } else {
-        return false;
+The master list of abilities can be kept in a single array of objects. The object structure should look like:
+{
+    id: 1,
+    name: "fireball",
+    damage: 30,
+    effects: {
+        fire: 2,
+        broken: 2,
+    }
+}
+
+There should be a helper function that takes an ability id and returns the ability object.
+
+The list of normal monsters should be a list of objects, each with a name, hp, and a list of abilities.
+
+The list of strong monsters should be a list of objects, each with a name, hp, and a list of abilities.
+
+there should be a helper function that takes a monster id and returns the monster object. 
+
+Steps:
+    Define the abilities data structure and implement the helper function.
+    Design the tree structure for branching paths.
+    Define room types and their corresponding actions.
+    Create the data structures for normal, strong, and boss monsters.
+    Implement the helper function for monsters.
+    Create a list of challenge objects with the required structure.
+    Test the challenge structure by creating a few sample challenges.
+    Integrate the challenge structure into the PvE menu, allowing players to select a challenge and start the encounter.
+    Build the user interface for the encounter, showing the player's progress through the challenge tree and the current room type.
+    Implement the logic for each room type, including healing, normal monster, strong monster, and boss encounters.
+    Test and refine the challenge structure and encounters, ensuring that players can successfully complete the challenges and receive appropriate rewards.
+
+ [
+  {
+    "id": 1,
+    "type": "boss",
+    "name": "Baroness Vexia",
+    "hp": 100,
+    "abilities": [
+      {
+        "name": "Shadow Bolt",
+        "damage": 50,
+        "effects": {
+          "shadow": 3,
+          "frost": 1
+        }
+      },
+      {
+        "name": "Blood Boil",
+        "damage": 70,
+        "effects": {
+          "bleed": 4
+        }
+      },
+      {
+        "name": "Curse of Darkness",
+        "damage": 90,
+        "effects": {
+          "shadow": 2,
+          "blind": 2
+        }
       }
-    } catch (error) {
-      console.error("Error validating word:", error);
-      return false;
-    }
-  };
-
-module.exports = { randomLetter, generateBoard, validateWord, letterRarity };
-
-server.js:
-const express = require('express');
-const http = require('http');
-const socketIO = require('socket.io');
-const cors = require('cors');
-const routes = require('./routes');
-const { createUser } = require('./dynamo-db');
-const { passport, authenticateSocket } = require('./auth');
-
-const PORT = 3001;
-
-const app = express();
-const corsOptions = {
-  origin: 'http://localhost:3000', // Replace this with your frontend URL
-  methods: ['GET', 'POST'],
-  credentials: true,
-};
-app.use(cors(corsOptions));
-app.use(express.json());
-app.use('/', routes);
-
-app.use(passport.initialize());
-
-const server = http.createServer(app);
-const io = socketIO(server, {
-  cors: {
-    origin: 'http://localhost:3000', // update this to frontend url in production
-    methods: ['GET', 'POST'],
-    credentials: true,
+    ]
   },
-});
-
-
-const setupSocket = require('./sockets');
-setupSocket(io, authenticateSocket);
-
-app.use((error, req, res, next) => {
-  console.error('Error:', error.message);
-  console.error('Stack:', error.stack);
-  res.status(500).send({ error: error.message });
-});
-
-server.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
-});
-
-sockets.js:
-const { generateBoard, randomLetter, validateWord, letterRarity } = require('./game-utils');
-const { authenticateSocket } = require('./auth');
-
-const setupSocket = (io, authenticateSocket) => {
-    io.use(authenticateSocket).on('connection', (socket) => {
-        console.log('A user connected:', socket.id);
-
-        socket.on('generateBoard', (size) => {
-            const newBoard = generateBoard(size);
-            socket.emit('newBoard', newBoard);
-        });
-
-        socket.on('replaceSelectedLetters', ({ board, selectedLetters }) => {
-            const updatedBoard = board.map((row, rowIndex) => {
-                return row.map((letter, colIndex) => {
-                    if (selectedLetters.some((pos) => pos.row === rowIndex && pos.col === colIndex)) {
-                        return randomLetter();
-                    }
-                    return letter;
-                });
-            });
-            socket.emit('updatedBoard', updatedBoard);
-        });
-
-        socket.on('submitWord', async (word) => {
-            console.log(`Received word: ${word} from ${socket.id}`);
-            // if word is less than 3 letters, return
-            if (word.length < 3) {
-                console.log('1 or 2 letter word declined');
-                return;
-            }
-
-            const isValid = await validateWord(word);
-            if (isValid) {
-                console.log('Valid word:', word);
-
-                socket.emit('wordAccepted', word);
-            } else {
-                console.log('Invalid word:', word);
-                // Handle the invalid word case as required
-            }
-        });
-
-        socket.on('disconnect', () => {
-            console.log(`A user disconnected: ${socket.id}, username: ${socket.user.username}`);
-        });
-    });
-};
-
-module.exports = setupSocket;
-
-and this is my function for requesting and recieving the character data:
-
-        getSocket().emit('getCharacters', userId);
-        getSocket().on('characters', (characters) => {
-            // Update the character list in the store
-            dispatch(setCharacters(characters));
-        });
-
-I'm open to suggestions on how to handle all of this.
-
-Here is the data as I expect to use it from DynamoDB:
-character: {
-  id: characterId,
-  name: 'character name',
-  level: 1,
-  experience: 0,
-  class: 'warrior',
-  talentPoints: 0,
-  talents: {
-    class: {
-    },
-    generic: {
-    },
+  {
+    "id": 2,
+    "type": "strong",
+    "name": "Orc Warlord",
+    "hp": 60,
+    "abilities": [
+      {
+        "name": "Savage Strike",
+        "damage": 30,
+        "effects": {
+          "knockback": 2,
+          "bleed": 1
+        }
+      },
+      {
+        "name": "Thunderclap",
+        "damage": 40,
+        "effects": {
+          "shock": 2,
+          "knockback": 1
+        }
+      },
+      {
+        "name": "Whirlwind",
+        "damage": 50,
+        "effects": {
+          "knockback": 1,
+          "bleed": 3
+        }
+      }
+    ]
   },
-  inventory: [
-  { weapon: itemId },
-  { armor: itemId },
-  { trinket: itemId },
-  { helmet: itemId },
-  { inventory: [itemId, itemId, itemId, itemId, itemId, itemId, itemId, itemId, itemId, itemId]}
-  ]
-}
-
-item: {
-  id: itemId,
-  name: 'item name',
-  type: 'weapon',
-  stats: {
-    strength: 1,
-    agility: 1,
-    intellect: 1,
-  },
-  keywords: ['keyword1', 'keyword2'],
-  combos: [{}];
-}
-
-  "keywords" is a list of words that share a theme with the item name. For example, a sword might have the keywords "sword", "blade", "weapon", "metal", "sharp", etc. The keywords, when used in the word game, gain more powerful effects
-  "combos" will remain a placeholder empty object for now. It will be used to store the 
+ {
+    "id": 3,
+    "type": "normal",
+    "name": "Goblin Raider",
+    "hp": 30,
+    "abilities": [
+      {
+        "name": "Gouging Stab",
+        "damage": 15,
+        "effects": {
+          "bleed": 2,
+          "poison": 1
+        }
+      },
+      {
+        "name": "Smoke Bomb",
+        "damage": 5,
+        "effects": {
+          "blind": 3
+        }
+      },
+      {
+        "name": "Fiery Arrow",
+        "damage": 20,
+        "effects": {
+          "fire": 2,
+          "burn": 1
+        }
+      }
+    ]
+  }
+]

@@ -46,7 +46,12 @@ const authenticateSocket = (socket, next) => {
     console.log(socket.handshake.query.token)
     jwt.verify(socket.handshake.query.token, JWT_SECRET, (err, decoded) => {
       if (err) {
-        console.log('Socket authentication error:', err); // Log the error
+        
+        if (err.message.includes('jwt expired')) {
+          return next(new Error('Token expired'));
+        }
+        console.log('Socket authentication error:', err);
+
         return next(new Error('Authentication error'));
       }
       socket.user = decoded;
