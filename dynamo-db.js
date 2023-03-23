@@ -8,6 +8,7 @@ const {
   AWS_SECRET_ACCESS_KEY,
   AWS_REGION,
   TABLE_NAME,
+  CHARACTER_TABLE_NAME
 } = process.env;
 
 AWS.config.update({
@@ -57,6 +58,57 @@ const createUser = async (userData) => {
   }
 };
 
+const createCharacter = async (username, characterData) => {
+  const params = {
+    TableName: CHARACTER_TABLE_NAME,
+    Item: {
+      id: new Date().getTime().toString(),
+      username: username,
+      name: characterData.name,
+      level: 1,
+      experience: 0,
+      class: characterData.class,
+      talentPoints: 0,
+      talents: { class: {}, generic: {} },
+      stats: { strength: 10, dexterity: 10, intelligence: 10 },
+      inventory: [
+        { weapon: null },
+        { armor: null },
+        { trinket: null },
+        { helmet: null },
+        { inventory: [null, null, null, null, null, null, null, null, null, null] },
+      ],
+    },
+  };
+
+  try {
+    await docClient.put(params).promise();
+    return params.Item;
+  } catch (error) {
+    console.error(error);
+    throw error;
+  }
+};
+
+const getCharactersByUsername = async (username) => {
+  const params = {
+    TableName: CHARACTER_TABLE_NAME,
+    IndexName: 'username-index',
+    KeyConditionExpression: 'username = :u',
+    ExpressionAttributeValues: {
+      ':u': username,
+    },
+  };
+
+  try {
+    const result = await docClient.query(params).promise();
+    return result.Items.length ? result.Items : [];
+  } catch (error) {
+    console.error(error);
+    throw error;
+  }
+};
+
 const validatePassword = async (user, password) => {
   try {
     const hashedPassword = user.password; // Extract the hashed password from the user object
@@ -72,4 +124,6 @@ module.exports = {
   getUserByUsername,
   createUser,
   validatePassword,
+  getCharactersByUsername,
+  createCharacter,
 };

@@ -1,31 +1,112 @@
+const itemId = 0;
+const fakePlayerData = [{
+    id: 1,
+    name: 'Zoltan',
+    level: 1,
+    experience: 0,
+    class: 'warrior',
+    talentPoints: 0,
+    talents: {
+        class: {
+        },
+        generic: {
+        },
+    },
+    stats: {
+        strength: 10,
+        dexterity: 10,
+        intelligence: 10,
+    },
+    inventory: [
+        { weapon: itemId },
+        { armor: itemId },
+        { trinket: itemId },
+        { helmet: itemId },
+        { inventory: [itemId, itemId, itemId, itemId, itemId, itemId, itemId, itemId, itemId, itemId] }
+    ]
+}];
+
 const { generateBoard, randomLetter, validateWord, letterRarity } = require('./game-utils');
+const { getCharactersByUsername, createCharacter } = require('./dynamo-db');
 const { authenticateSocket } = require('./auth');
-var userArray = [];
+
+class User {
+    constructor(id, username, currentCharacter = null, gameState = 'idle', inMatch = false, board = []) {
+        this.id = id;
+        this.username = username;
+        this.currentCharacter = currentCharacter;
+        this.gameState = gameState;
+        this.inMatch = inMatch;
+        this.board = board;
+    }
+}
+
+let users = [];
+let matchmakingQueue = [];
+
+const findUserById = (id) => users.find((user) => user.id === id);
+
+const addUser = (user) => {
+    users.push(user);
+};
+
+const removeUser = (id) => {
+    users = users.filter((user) => user.id !== id);
+};
+
+const updateUser = (id, data) => {
+    const userIndex = users.findIndex((user) => user.id === id);
+    if (userIndex !== -1) {
+        users[userIndex] = { ...users[userIndex], ...data };
+    }
+};
+
+const addToMatchmakingQueue = (user) => {
+    matchmakingQueue.push(user);
+};
+
+const removeFromMatchmakingQueue = (id) => {
+    matchmakingQueue = matchmakingQueue.filter((user) => user.id !== id);
+};
 
 const setupSocket = (io, authenticateSocket) => {
-    console.log(authenticateSocket);
     io.use(authenticateSocket).on('connection', (socket) => {
         console.log('A user connected:', socket.id);
-        
-        userArray.push(socket.user.username);
+        console.log('User:', socket.user);
+
+        const newUser = new User(socket.id, socket.user.username);
+        addUser(newUser);
 
         socket.on('requestPVEData', () => {
             console.log("Requesting PVE data...");
             // Generate and send PVE-specific data to the client
             socket.emit('playerData', { pveData: 'Sample PVE data' });
-          });
+        });
 
         socket.on("requestPlayerData", () => {
-            console.log("Requesting player data...");
+            socket.emit("playerData", { playerData: fakePlayerData });
         });
 
         socket.on('generateBoard', (size) => {
             const newBoard = generateBoard(size);
+            updateUser(socket.id, { board: newBoard });
             socket.emit('newBoard', newBoard);
         });
 
-        socket.on('replaceSelectedLetters', ({ board, selectedLetters }) => {
-            const updatedBoard = board.map((row, rowIndex) => {
+        socket.on('requestCharacters', async () => {
+            console.log("Requesting characters...");
+            const characters = await getCharactersByUsername(socket.user.username);
+            socket.emit('characters', characters);
+        });
+
+        socket.on('createCharacter', (characterData) => {
+            console.log("Creating character...");
+            createCharacter(socket.user.username, characterData);
+        });
+
+        socket.on('replaceSelectedLetters', ({ selectedLetters }) => {
+            const user = findUserById(socket.id);
+            const updatedBoard = user.board.map((row, rowIndex) => {
                 return row.map((letter, colIndex) => {
                     if (selectedLetters.some((pos) => pos.row === rowIndex && pos.col === colIndex)) {
                         return randomLetter();
@@ -33,6 +114,7 @@ const setupSocket = (io, authenticateSocket) => {
                     return letter;
                 });
             });
+            updateUser(socket.id, { board: updatedBoard });
             socket.emit('updatedBoard', updatedBoard);
         });
 
@@ -57,6 +139,7 @@ const setupSocket = (io, authenticateSocket) => {
 
         socket.on('disconnect', () => {
             console.log(`A user disconnected: ${socket.id}, username: ${socket.user.username}`);
+            removeUser(socket.id);
         });
     });
 };

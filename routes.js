@@ -28,11 +28,11 @@ router.post('/register', async (req, res) => {
 });
 
 router.post('/login', passport.authenticate('local', { session: false }), (req, res) => {
-  const accessToken = jwt.sign({ id: req.user.id }, JWT_SECRET, {
+  const accessToken = jwt.sign({ id: req.user.id, username: req.user.username }, JWT_SECRET, {
     expiresIn: '1s',
   });
 
-  const refreshToken = jwt.sign({ id: req.user.id }, JWT_SECRET, {
+  const refreshToken = jwt.sign({ id: req.user.id, username: req.user.username }, JWT_SECRET, {
     expiresIn: '7d', // Modify the expiration time as needed
   });
 
@@ -53,8 +53,8 @@ router.post('/refresh-token', (req, res) => {
       return res.sendStatus(403);
     }
 
-    const accessToken = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '1h' });
-    const refreshToken = jwt.sign({ id: user.id }, JWT_SECRET, {
+    const accessToken = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '1h' });
+    const refreshToken = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, {
       expiresIn: '7d', // Modify the expiration time as needed
     });
     res.json({ accessToken, refreshToken });

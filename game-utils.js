@@ -10,7 +10,13 @@ const keyGenerator = () => {
   };
 };
 
-const randomLetter = () => letterFrequency[Math.floor(Math.random() * letterFrequency.length)];
+const randomLetter = () => {
+  return {
+    letter: letterFrequency[Math.floor(Math.random() * letterFrequency.length)],
+    key: keyGen(),
+    effect: "",
+  };
+};
 
 const keyGen = keyGenerator();
 
@@ -19,12 +25,7 @@ const generateBoard = (size) => {
   for (let i = 0; i < size; i++) {
     const row = [];
     for (let j = 0; j < size; j++) {
-      let newRandomLetter = {
-        letter: randomLetter(),
-        key: keyGen(),
-        effect: "",
-      };
-      row.push(newRandomLetter);
+      row.push(randomLetter());
     }
     board.push(row);
   }
