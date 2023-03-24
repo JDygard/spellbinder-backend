@@ -31,4 +31,4 @@ const challenges = [
     }
 ];
 
-module.exports = [challenges];
+module.exports = challenges;

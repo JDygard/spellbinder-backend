@@ -1,9 +1,11 @@
+const monsters = require("./data/monsters");
+
 function callCreatures(challenge) {
     let current = challenge.tree;
     while (current) {
         switch (current.type) {
             case "healing":
-                console.log("Call healing creature here");
+                console.log("Call healing here");
                 break;
             case "normal":
                 console.log("Call normal creature here");
@@ -23,10 +25,61 @@ function callCreatures(challenge) {
 }
 
 function getChallengeSummary(challenges) {
-    return challenges[0].map((challenge) => {
-      const { id, name, reward } = challenge;
-      return { id, name, reward };
+    return challenges.map((challenge) => {
+        const { id, name, reward } = challenge;
+        return { id, name, reward };
     });
-  }
+}
 
-module.exports = { callCreatures, getChallengeSummary };
+function getFirstMonsterInChallenge(challenge) {
+    const monster = monsters.find((m) => m.type === challenge.tree.type);
+    return { ...monster };
+}
+
+const monsterAttack = (user, monster) => {
+    // Choose a random ability from the monster's abilities
+    const ability = monster.abilities[Math.floor(Math.random() * monster.abilities.length)];
+
+    // Calculate the damage dealt
+    const damage = ability.damage;
+
+    // Update the player's HP
+    user.gameState.playerHp -= damage;
+
+    // Add the monster's ability effects to the gameState.tileEffects array
+    for (const effect in ability.effects) {
+        user.gameState.tileEffects.push({ type: effect, value: ability.effects[effect] });
+    }
+
+    // Update the game log
+    user.gameState.gameLog.push({
+        type: "monsterAttack",
+        abilityName: ability.name,
+        damage: damage,
+    });
+
+    // Emit the updated game state
+    user.socket.emit("gameStateUpdate", user.gameState);
+
+    // Check if the player has lost
+    if (user.gameState.playerHp <= 0) {
+        console.log("game over")
+    }
+};
+
+
+const attackInterval = 5000; // The interval between monster attacks in milliseconds
+
+function startMonsterAttacks(user, monster) {
+    const attackTimer = setInterval(() => {
+        // Perform the monster attack
+        monsterAttack(user, monster);
+
+        // Check if the player is dead and stop the timer
+        if (user.gameState.playerHp <= 0) {
+            clearInterval(attackTimer);
+        }
+    }, attackInterval);
+}
+
+module.exports = { startMonsterAttacks, callCreatures, getChallengeSummary, getFirstMonsterInChallenge, monsterAttack };

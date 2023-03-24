@@ -117,14 +117,14 @@ The list of strong monsters should be a list of objects, each with a name, hp, a
 there should be a helper function that takes a monster id and returns the monster object. 
 
 Steps:
-    Define the abilities data structure and implement the helper function.
-    Design the tree structure for branching paths.
-    Define room types and their corresponding actions.
-    Create the data structures for normal, strong, and boss monsters.
-    Implement the helper function for monsters.
-    Create a list of challenge objects with the required structure.
-    Test the challenge structure by creating a few sample challenges.
-    Integrate the challenge structure into the PvE menu, allowing players to select a challenge and start the encounter.
+    -Define the abilities data structure and implement the helper function.
+    -Design the tree structure for branching paths.
+    -Define room types and their corresponding actions.
+    -Create the data structures for normal, strong, and boss monsters.
+    -Implement the helper function for monsters.
+    -Create a list of challenge objects with the required structure.
+    -Test the challenge structure by creating a few sample challenges.
+    -Integrate the challenge structure into the PvE menu, allowing players to select a challenge and start the encounter.
     Build the user interface for the encounter, showing the player's progress through the challenge tree and the current room type.
     Implement the logic for each room type, including healing, normal monster, strong monster, and boss encounters.
     Test and refine the challenge structure and encounters, ensuring that players can successfully complete the challenges and receive appropriate rewards.
@@ -225,3 +225,22 @@ Steps:
     ]
   }
 ]
+
+1. Players have combos, but we will implement those later in the process. Monsters have abilities, which are used on a cooldown that can be affect by the player's abilities.
+
+2. There are no turns, the player can input words as fast as they can find and type them. The monsters use abilities on a cooldown.
+
+3. Players have tile effects, monsters have status effects. A monster whose abilities apply tile effects will be stored in the game state and used by randomLetter() to apply the effect to generated letters. They may be stored like:
+[
+  { fire: 2 },
+  { blind: 1},
+]
+Which would mean that the next three tiles would have these effects on them, fire fire blind.
+
+4. Timer: Again, no timer.
+
+5. Score: Total damage dealt to the monster, total damage healed by player
+
+6. Game log: We can keep track of all words accepted and damage dealt.
+
+7. Win/loss: Simple: if the monster's hp is 0, the player wins. If the player's hp is 0, the player loses.
