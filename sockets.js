@@ -199,15 +199,16 @@ const setupSocket = (io, authenticateSocket) => {
                 user.gameState.score += wordValue;
         
                 // Add the word to the game log
-                user.gameState.gameLog.push({ word, value: wordValue });
+                user.gameState.gameLog.push({ word, value: wordValue, color: 'success' });
         
                 // Send the updated game state to the client
                 socket.emit('wordAccepted', { word, wordValue });
                 socket.emit('gameStateUpdate', user.gameState);
                 socket.emit('gameLogUpdate', user.gameState.gameLog);
             } else {
-                console.log('Invalid word:', word);
-                // Handle the invalid word case as required
+                const user = findUserById(socket.id);
+                user.gameState.gameLog.push({ word, value: 0, color: 'fail' });
+                socket.emit('wordRejected', word);
             }
         });
 
