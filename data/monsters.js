@@ -68,31 +68,52 @@ const monsters = [
       "name": "Goblin Raider",
       "hp": 30,
       "abilities": [
-        {
-          "name": "Gouging Stab",
-          "damage": 15,
-          "effects": {
-            "bleed": 2,
-            "poison": 1
+          {
+            "name": "Gouging Stab",
+            "damage": 15,
+            "effects": [
+              {
+                "type": "bleed",
+                "duration": 2,
+                "damage": 5
+              },
+              {
+                "type": "poison",
+                "duration": 1,
+                "damage": 3
+              }
+            ]
+          },
+          {
+            "name": "Smoke Bomb",
+            "damage": 5,
+            "effects": [
+              {
+                "type": "blind",
+                "duration": 3,
+                "damage": 0
+              }
+            ]
+          },
+          {
+            "name": "Fiery Arrow",
+            "damage": 20,
+            "effects": [
+              {
+                "type": "fire",
+                "duration": 2,
+                "damage": 10
+              },
+              {
+                "type": "burn",
+                "duration": 1,
+                "damage": 5
+              }
+            ]
           }
-        },
-        {
-          "name": "Smoke Bomb",
-          "damage": 5,
-          "effects": {
-            "blind": 3
-          }
-        },
-        {
-          "name": "Fiery Arrow",
-          "damage": 20,
-          "effects": {
-            "fire": 2,
-            "burn": 1
-          }
-        }
-      ]
+        ]
     }
-  ]
+  ];
+  
 
 module.exports = monsters;

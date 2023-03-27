@@ -48,7 +48,7 @@ const monsterAttack = (user, monster) => {
 
     // Add the monster's ability effects to the gameState.tileEffects array
     for (const effect in ability.effects) {
-        user.gameState.tileEffects.push({ type: effect, value: ability.effects[effect] });
+        user.gameState.tileEffects.push(ability.effects[effect]);
     }
 
     // Update the game log

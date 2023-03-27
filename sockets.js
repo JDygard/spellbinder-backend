@@ -1,42 +1,42 @@
 const itemId = 0;
 const fakePlayerData = [
     {
-      id: 1,
-      name: "Zoltan",
-      level: 1,
-      hp: 100,
-      experience: 0,
-      class: "warrior",
-      talentPoints: 0,
-      talents: {
-        class: {},
-        generic: {},
-      },
-      stats: {
-        strength: 10,
-        dexterity: 10,
-        intelligence: 10,
-      },
-      inventory: {
-        weapon: itemId,
-        armor: itemId,
-        trinket: itemId,
-        helmet: itemId,
-        inventory: [
-          itemId,
-          itemId,
-          itemId,
-          itemId,
-          itemId,
-          itemId,
-          itemId,
-          itemId,
-          itemId,
-          itemId,
-        ],
-      },
+        id: 1,
+        name: "Zoltan",
+        level: 1,
+        hp: 100,
+        experience: 0,
+        class: "warrior",
+        talentPoints: 0,
+        talents: {
+            class: {},
+            generic: {},
+        },
+        stats: {
+            strength: 10,
+            dexterity: 10,
+            intelligence: 10,
+        },
+        inventory: {
+            weapon: itemId,
+            armor: itemId,
+            trinket: itemId,
+            helmet: itemId,
+            inventory: [
+                itemId,
+                itemId,
+                itemId,
+                itemId,
+                itemId,
+                itemId,
+                itemId,
+                itemId,
+                itemId,
+                itemId,
+            ],
+        },
     },
-  ];
+];
 
 const { generateBoard, randomLetter, validateWord, letterRarity } = require('./game-utils');
 const { getCharactersByUsername, createCharacter } = require('./dynamo-db');
@@ -85,22 +85,62 @@ const removeFromMatchmakingQueue = (id) => {
     matchmakingQueue = matchmakingQueue.filter((user) => user.id !== id);
 };
 
+function applyTileEffectToNewLetter(tileEffects, newLetter) {
+    if (tileEffects.length > 0) {
+        const effect = tileEffects.shift(); // Remove the least recently added effect
+        newLetter.effect = effect;
+    }
+    return newLetter;
+}
+
+// function applyTileEffects(letterObj) {
+//     if (!letterObj.effect) {
+//         return letterObj;
+//     }
+
+//     switch (letterObj.effect.type) {
+//         case "fire":
+//             // Apply the fire effect and handle its duration
+//             letterObj.effect.duration--;
+//             if (letterObj.effect.duration === 0) {
+//                 letterObj.effect = null;
+//             }
+//             break;
+//         // Add other effect cases here
+//         default:
+//             break;
+//     }
+
+//     return letterObj;
+// }
+
+function handleTileDuration(user) {
+    // reduce every tile's duration by 1
+    user.board = user.board.map((row) => {
+        return row.map((letterObj) => {
+            if (letterObj.effect && letterObj.effect.duration > 0) {
+                letterObj.effect.duration--;
+            }
+            return letterObj;
+        });
+    });
+
+    // reduce every tileeffect's duration by 1
+    user.gameState.tileEffects = user.gameState.tileEffects.map((effect) => {
+        effect.duration--;
+        return effect;
+    });
+}
+
 const setupSocket = (io, authenticateSocket) => {
     io.use(authenticateSocket).on('connection', (socket) => {
-        console.log('A user connected:', socket.id);
-        console.log('User:', socket.user);
+        console.log('A user connected:', socket.id, "username:", socket.user.username);
 
         const newUser = new User(socket.id, socket.user.username, socket);
         addUser(newUser);
 
 
         // USER DATA EXCHANGE =======================================================
-        socket.on('requestPVEData', () => {
-            console.log("Requesting PVE data...");
-            // Generate and send PVE-specific data to the client
-            socket.emit('playerData', { pveData: 'Sample PVE data' });
-        });
-
         socket.on("requestPlayerData", () => {
             socket.emit("playerData", { playerData: fakePlayerData });
         });
@@ -138,20 +178,17 @@ const setupSocket = (io, authenticateSocket) => {
         // CHARACTER SELECT SCREEN ==================================================
 
         socket.on('requestCharacters', async () => {
-            console.log("Requesting characters...");
             const characters = await getCharactersByUsername(socket.user.username);
             socket.emit('characters', characters);
         });
 
         socket.on('createCharacter', (characterData) => {
-            console.log("Creating character...");
             createCharacter(socket.user.username, characterData);
         });
 
         // CHARACTER SELECT SCREEN END ==============================================
 
-
-        // GENERAL BOARD ACTIONS ====================================================
+        // GAMEPLAY =================================================================
         socket.on('generateBoard', (size) => {
             const newBoard = generateBoard(size);
             updateUser(socket.id, { board: newBoard });
@@ -163,7 +200,13 @@ const setupSocket = (io, authenticateSocket) => {
             const updatedBoard = user.board.map((row, rowIndex) => {
                 return row.map((letter, colIndex) => {
                     if (selectedLetters.some((pos) => pos.row === rowIndex && pos.col === colIndex)) {
-                        return randomLetter();
+                        // Generate a new letter
+                        const newLetter = randomLetter();
+        
+                        // Apply the most recent effect if there are any effects in the tileEffects array
+                        applyTileEffectToNewLetter(user.gameState.tileEffects, newLetter);
+        
+                        return newLetter;
                     }
                     return letter;
                 });
@@ -172,48 +215,55 @@ const setupSocket = (io, authenticateSocket) => {
             socket.emit('updatedBoard', updatedBoard);
         });
 
-        socket.on('submitWord', async (word) => {
-            console.log(`Received word: ${word} from ${socket.id}`);
+        socket.on('submitWord', async (data) => {
+            const { word, letters } = data;
+            const user = findUserById(socket.id);
+
             // if word is less than 3 letters, return
             if (word.length < 3) {
-                console.log('1 or 2 letter word declined');
                 return;
             }
-        
+
             const isValid = await validateWord(word);
             if (isValid) {
-                console.log('Valid word:', word);
-        
-                // Calculate the word value
+                handleTileDuration(user);
+
+                // WORD VALUE START =====================================================
                 let wordValue = 0;
-                for (let letter of word) {
-                    wordValue += letterRarity(letter).value;
+                let multiplier = 1;
+                let baseMultiplier = 1.5;
+                
+                for (let letterObj of letters) {
+                    wordValue += letterRarity(letterObj.letter).value;
                 }
-        
-                // Apply damage to the monster
-                const user = findUserById(socket.id);
+                
+                if (letters.length >= 4) {
+                    multiplier = Math.pow(baseMultiplier, letters.length - 3);
+                }
+                wordValue *= multiplier;
+                // WORD VALUE END =======================================================
+
+                // GAMESTATE START ======================================================
                 user.gameState.monsterHp -= wordValue;
-                console.log('Monster HP:', user.gameState.monsterHp)
-        
-                // Update the score
+
                 user.gameState.score += wordValue;
-        
-                // Add the word to the game log
-                user.gameState.gameLog.push({ word, value: wordValue, color: 'success' });
-        
-                // Send the updated game state to the client
-                socket.emit('wordAccepted', { word, wordValue });
-                socket.emit('gameStateUpdate', user.gameState);
-                socket.emit('gameLogUpdate', user.gameState.gameLog);
+
+                user.gameState.gameLog.push({ word, value: wordValue, color: "success" });
+                // GAMESTATE END ========================================================
+
+                // STATE UPDATES START ==================================================
+                socket.emit("wordAccepted", { word, wordValue });
+                socket.emit("gameLogUpdate", user.gameState.gameLog);
+                // STATE UPDATES END ====================================================
             } else {
                 const user = findUserById(socket.id);
-                user.gameState.gameLog.push({ word, value: 0, color: 'fail' });
-                socket.emit('wordRejected', word);
+                user.gameState.gameLog.push({ word, value: 0, color: "fail" });
+                socket.emit("wordRejected", word);
             }
+            socket.emit("gameStateUpdate", user.gameState);
         });
 
-        // GENERAL BOARD ACTIONS END ================================================
-
+        // GAMEPLAY END ============================================================
 
         socket.on('disconnect', () => {
             console.log(`A user disconnected: ${socket.id}, username: ${socket.user.username}`);

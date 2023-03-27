@@ -1,4 +1,4 @@
-const letterFrequency = "EEEEEEEEEEEEEEEEEEEAAAAAAAAAAIIIIIIIIINNNNNNNOOOOOOOOTTTTTTTRRRRRRSSSSSLLLLLCCCCCUUUUUDMMMMPHFFBBGYWKVJXQZ";
+const letterFrequency = "EEEEEEEEEEEEEEEEEAAAAAAAAIIIIIIINNNNNNNOOOOOOTTTTTTTRRRRRRSSSSSLLLLLCCCCCUUUUDMMMMPHFFBBGYWKVJXQZ";
 
 
 let key = 0;
@@ -14,7 +14,7 @@ const randomLetter = () => {
   return {
     letter: letterFrequency[Math.floor(Math.random() * letterFrequency.length)],
     key: keyGen(),
-    effect: "fire",
+    effect: [],
   };
 };
 
