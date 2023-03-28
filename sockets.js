@@ -5,6 +5,7 @@ const fakePlayerData = [
         name: "Zoltan",
         level: 1,
         hp: 100,
+        maxHp: 100,
         experience: 0,
         class: "warrior",
         talentPoints: 0,
@@ -35,8 +36,32 @@ const fakePlayerData = [
                 itemId,
             ],
         },
+        combos: [
+            {
+                id: 1,
+                name: "Quick Healer",
+                sequence: [3, 4],
+                timeLimit: 10,
+                effect: {
+                    type: 'heal',
+                    value: 20,
+                },
+            },
+            {
+                id: 2,
+                name: "Damage Boost",
+                sequence: [5, 5],
+                timeLimit: 15,
+                effect: {
+                    type: 'damageMultiplier',
+                    value: 2,
+                    duration: 10,
+                },
+            },
+        ],
     },
 ];
+
 
 const { generateBoard, randomLetter, validateWord, letterRarity } = require('./game-utils');
 const { getCharactersByUsername, createCharacter } = require('./dynamo-db');
@@ -46,7 +71,7 @@ const challenges = require('./data/challenges');
 const monsters = require('./data/monsters');
 
 class User {
-    constructor(id, username, socket, currentCharacter = null, gameState = null, inMatch = false, board = []) {
+    constructor(id, username, socket, currentCharacter = null, gameState = null, inMatch = false, board = [], combos = []) {
         this.id = id;
         this.username = username;
         this.socket = socket;
@@ -54,9 +79,12 @@ class User {
         this.gameState = gameState;
         this.inMatch = inMatch;
         this.board = board;
+        this.combos = combos;
     }
 }
 
+
+// USERS AND MATCHMAKING START ========================================
 let users = [];
 let matchmakingQueue = [];
 
@@ -84,7 +112,88 @@ const addToMatchmakingQueue = (user) => {
 const removeFromMatchmakingQueue = (id) => {
     matchmakingQueue = matchmakingQueue.filter((user) => user.id !== id);
 };
+// USERS AND MATCHMAKING END ========================================
 
+
+// COMBO FUNCTIONS START ========================================
+function checkForCombos(user) {
+    // Filter out the valid word entries from the gameLog
+    const validWordEntries = user.gameState.gameLog.filter(
+        (entry) => entry.color === "success"
+    );
+
+    // Iterate through the user's combos
+    for (const combo of user.combos) {
+        let comboIndex = 0;
+        let comboStartTime = null;
+
+        // Iterate through the valid word entries in reverse order
+        for (let i = validWordEntries.length - 1; i >= 0; i--) {
+            const entry = validWordEntries[i];
+
+            // If the word length matches the current combo step
+            if (entry.length === combo.sequence[comboIndex]) {
+                // If this is the first step in the combo, set the combo start time
+                if (comboIndex === 0) {
+                    comboStartTime = entry.submittedAt;
+                }
+
+                // If the time difference is within the combo time limit, increment the combo index
+                if (comboStartTime - entry.submittedAt <= combo.timeLimit * 1000) {
+                    comboIndex++;
+                } else {
+                    // If the time limit is exceeded, reset the combo progress
+                    break;
+                }
+
+                // If the entire combo sequence has been matched, apply the combo effect and exit the loop
+                if (comboIndex === combo.sequence.length) {
+                    console.log("CCCCOMBOOO")
+                    applyComboEffect(user, combo);
+                    break;
+                }
+            } else {
+                // If the word length doesn't match, reset the combo progress
+                console.log("NO COMBO FOR YOU")
+                break;
+            }
+        }
+    }
+}
+
+function applyComboEffect(user, combo) {
+    const effect = combo.effect;
+
+    switch (effect.type) {
+        case 'damageMultiplier':
+            user.gameState.damageMultiplier = effect.value;
+            setTimeout(() => {
+                user.gameState.damageMultiplier = 1;
+            }, effect.duration * 1000);
+            break;
+
+        case 'heal':
+            user.gameState.playerHp += effect.value;
+            if (user.gameState.playerHp > user.maxHp) {
+                user.gameState.playerHp = user.maxHp;
+            }
+            break;
+
+        case 'applyStatusEffect':
+            // Assuming there's a function applyStatusEffect that handles applying status effects
+            applyStatusEffect(user, effect.statusEffect, effect.duration);
+            break;
+
+        // Add other combo effect types here as needed
+
+        default:
+            console.error(`Unknown combo effect type: ${effect.type}`);
+    }
+}
+// COMBO FUNCTIONS END ========================================
+
+
+// TILE EFFECTS START ========================================
 function applyTileEffectToNewLetter(tileEffects, newLetter) {
     if (tileEffects.length > 0) {
         const effect = tileEffects.shift(); // Remove the least recently added effect
@@ -93,50 +202,36 @@ function applyTileEffectToNewLetter(tileEffects, newLetter) {
     return newLetter;
 }
 
-// function applyTileEffects(letterObj) {
-//     if (!letterObj.effect) {
-//         return letterObj;
-//     }
-
-//     switch (letterObj.effect.type) {
-//         case "fire":
-//             // Apply the fire effect and handle its duration
-//             letterObj.effect.duration--;
-//             if (letterObj.effect.duration === 0) {
-//                 letterObj.effect = null;
-//             }
-//             break;
-//         // Add other effect cases here
-//         default:
-//             break;
-//     }
-
-//     return letterObj;
-// }
-
 function handleTileDuration(user) {
-    // reduce every tile's duration by 1
+    // Reduce every tile's duration by 1 and remove the effect if the duration is 1
     user.board = user.board.map((row) => {
         return row.map((letterObj) => {
-            if (letterObj.effect && letterObj.effect.duration > 0) {
+            if (letterObj.effect.duration > 1) {
+                console.log("duration:", letterObj.effect.duration)
                 letterObj.effect.duration--;
+
+            } else {
+                letterObj.effect = [];
             }
             return letterObj;
         });
     });
 
-    // reduce every tileeffect's duration by 1
-    user.gameState.tileEffects = user.gameState.tileEffects.map((effect) => {
-        effect.duration--;
-        return effect;
-    });
+    // Reduce every tile effect's duration by 1 and remove the effect if the duration is 1
+    user.gameState.tileEffects = user.gameState.tileEffects
+        .map((effect) => {
+            effect.duration--;
+            return effect;
+        })
+        .filter((effect) => effect.duration > 0);
 }
+// TILE EFFECTS END ========================================
 
 const setupSocket = (io, authenticateSocket) => {
     io.use(authenticateSocket).on('connection', (socket) => {
         console.log('A user connected:', socket.id, "username:", socket.user.username);
 
-        const newUser = new User(socket.id, socket.user.username, socket);
+        const newUser = new User(socket.id, socket.user.username, socket, null, null, false, [], fakePlayerData[0].combos);
         addUser(newUser);
 
 
@@ -202,10 +297,10 @@ const setupSocket = (io, authenticateSocket) => {
                     if (selectedLetters.some((pos) => pos.row === rowIndex && pos.col === colIndex)) {
                         // Generate a new letter
                         const newLetter = randomLetter();
-        
+
                         // Apply the most recent effect if there are any effects in the tileEffects array
                         applyTileEffectToNewLetter(user.gameState.tileEffects, newLetter);
-        
+
                         return newLetter;
                     }
                     return letter;
@@ -232,11 +327,11 @@ const setupSocket = (io, authenticateSocket) => {
                 let wordValue = 0;
                 let multiplier = 1;
                 let baseMultiplier = 1.5;
-                
+
                 for (let letterObj of letters) {
                     wordValue += letterRarity(letterObj.letter).value;
                 }
-                
+
                 if (letters.length >= 4) {
                     multiplier = Math.pow(baseMultiplier, letters.length - 3);
                 }
@@ -248,8 +343,21 @@ const setupSocket = (io, authenticateSocket) => {
 
                 user.gameState.score += wordValue;
 
-                user.gameState.gameLog.push({ word, value: wordValue, color: "success" });
+                user.gameState.gameLog.push({
+                    word,
+                    value: wordValue,
+                    color: "success",
+                    length: word.length, // Add the word length
+                    submittedAt: Date.now(), // Add the submission time
+                });
                 // GAMESTATE END ========================================================
+
+                // COMBOS START =========================================================
+                checkForCombos(user);
+                const validWordEntries = user.gameState.gameLog.filter(
+                    (entry) => entry.color === "success"
+                );
+                // COMBOS END ===========================================================
 
                 // STATE UPDATES START ==================================================
                 socket.emit("wordAccepted", { word, wordValue });

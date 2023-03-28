@@ -74,12 +74,12 @@ const monsters = [
             "effects": [
               {
                 "type": "bleed",
-                "duration": 2,
+                "duration": 10,
                 "damage": 5
               },
               {
                 "type": "poison",
-                "duration": 1,
+                "duration": 10,
                 "damage": 3
               }
             ]
@@ -90,7 +90,7 @@ const monsters = [
             "effects": [
               {
                 "type": "blind",
-                "duration": 3,
+                "duration": 6,
                 "damage": 0
               }
             ]
@@ -106,7 +106,7 @@ const monsters = [
               },
               {
                 "type": "burn",
-                "duration": 1,
+                "duration": 10,
                 "damage": 5
               }
             ]
