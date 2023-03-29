@@ -69,6 +69,7 @@ const { authenticateSocket } = require('./auth');
 const { callCreatures, getChallengeSummary, getFirstMonsterInChallenge, startMonsterAttacks } = require('./gameController');
 const challenges = require('./data/challenges');
 const monsters = require('./data/monsters');
+const { use } = require('passport');
 
 class User {
     constructor(id, username, socket, currentCharacter = null, gameState = null, inMatch = false, board = [], combos = []) {
@@ -76,7 +77,7 @@ class User {
         this.username = username;
         this.socket = socket;
         this.currentCharacter = currentCharacter;
-        this.gameState = gameState;
+        this.gameState = gameState; // Initialize gameState and comboGameLog here
         this.inMatch = inMatch;
         this.board = board;
         this.combos = combos;
@@ -118,19 +119,17 @@ const removeFromMatchmakingQueue = (id) => {
 // COMBO FUNCTIONS START ========================================
 function checkForCombos(user) {
     // Filter out the valid word entries from the gameLog
-    const validWordEntries = user.gameState.gameLog.filter(
-        (entry) => entry.color === "success"
-    );
+    const validWordEntries = user.gameState.comboGameLog;
 
     // Iterate through the user's combos
     for (const combo of user.combos) {
         let comboIndex = 0;
         let comboStartTime = null;
+        let usedIndices = new Set();
 
-        // Iterate through the valid word entries in reverse order
-        for (let i = validWordEntries.length - 1; i >= 0; i--) {
+        // Iterate through the valid word entries
+        for (let i = 0; i < validWordEntries.length; i++) {
             const entry = validWordEntries[i];
-
             // If the word length matches the current combo step
             if (entry.length === combo.sequence[comboIndex]) {
                 // If this is the first step in the combo, set the combo start time
@@ -139,23 +138,37 @@ function checkForCombos(user) {
                 }
 
                 // If the time difference is within the combo time limit, increment the combo index
-                if (comboStartTime - entry.submittedAt <= combo.timeLimit * 1000) {
+                if (entry.submittedAt - comboStartTime <= combo.timeLimit * 1000) {
                     comboIndex++;
+                    usedIndices.add(i);
                 } else {
-                    // If the time limit is exceeded, reset the combo progress
-                    break;
+                    // Reset the combo progress and clear comboGameLog if the time limit is exceeded
+                    comboIndex = 0;
+                    comboStartTime = null;
+                    usedIndices.clear();
+                    user.gameState.comboGameLog = []; // Clear the comboGameLog
                 }
 
-                // If the entire combo sequence has been matched, apply the combo effect and exit the loop
+                // If the entire combo sequence has been matched
                 if (comboIndex === combo.sequence.length) {
-                    console.log("CCCCOMBOOO")
                     applyComboEffect(user, combo);
+                    console.log("successful combo: ", combo.name);
+
+                    // Reset the combo progress after a successful combo
+                    comboIndex = 0;
+                    comboStartTime = null;
+                    usedIndices.clear();
+
+                    user.gameState.comboGameLog = []; // Clear the comboGameLog
+
+                    // Break out of the loop to start the next combo check
                     break;
                 }
             } else {
-                // If the word length doesn't match, reset the combo progress
-                console.log("NO COMBO FOR YOU")
-                break;
+                // If the word length doesn't match, reset the combo progress and clear comboGameLog
+                comboIndex = 0;
+                comboStartTime = null;
+                usedIndices.clear();
             }
         }
     }
@@ -207,7 +220,6 @@ function handleTileDuration(user) {
     user.board = user.board.map((row) => {
         return row.map((letterObj) => {
             if (letterObj.effect.duration > 1) {
-                console.log("duration:", letterObj.effect.duration)
                 letterObj.effect.duration--;
 
             } else {
@@ -250,19 +262,23 @@ const setupSocket = (io, authenticateSocket) => {
         socket.on('challengeSelected', (challengeId) => {
             const challenge = challenges.find((c) => c.id === parseInt(challengeId));
             if (challenge) {
+                const user = findUserById(socket.id);
                 const firstMonster = getFirstMonsterInChallenge(challenge);
                 const gameState = {
                     monster: firstMonster,
                     playerHp: fakePlayerData[0].hp,
                     monsterHp: firstMonster.hp,
+                    combos: fakePlayerData[0].combos,
                     score: 0,
                     gameLog: [],
+                    comboGameLog: [],
                     tileEffects: [],
                 };
                 updateUser(socket.id, { gameState: gameState });
                 let thisUser = findUserById(socket.id);
                 startMonsterAttacks(thisUser, firstMonster)
                 socket.emit('startChallenge', firstMonster);
+                socket.emit("gameStateUpdate", user.gameState);
             } else {
                 console.log(`Challenge with ID ${challengeId} not found.`);
             }
@@ -280,8 +296,8 @@ const setupSocket = (io, authenticateSocket) => {
         socket.on('createCharacter', (characterData) => {
             createCharacter(socket.user.username, characterData);
         });
-
         // CHARACTER SELECT SCREEN END ==============================================
+
 
         // GAMEPLAY =================================================================
         socket.on('generateBoard', (size) => {
@@ -322,6 +338,12 @@ const setupSocket = (io, authenticateSocket) => {
             const isValid = await validateWord(word);
             if (isValid) {
                 handleTileDuration(user);
+
+                user.gameState.comboGameLog.push({
+                    word,
+                    length: word.length,
+                    submittedAt: Date.now(),
+                });
 
                 // WORD VALUE START =====================================================
                 let wordValue = 0;

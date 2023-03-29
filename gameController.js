@@ -65,11 +65,9 @@ const monsterAttack = (user, monster) => {
     // Check if the player has lost
     if (user.gameState.playerHp <= 0) {
         user.socket.emit("fightOver", { result: "lost" });
-        console.log("game over")
     }
     if (user.gameState.monsterHp <= 0) {
         user.socket.emit("fightOver", { result: "won" });
-        console.log("monster dead")
     }
 };
 
