@@ -3,7 +3,7 @@ const http = require('http');
 const socketIO = require('socket.io');
 const cors = require('cors');
 const routes = require('./routes');
-const { createUser } = require('./dynamo-db');
+const { createUser,initializeTables } = require('./dynamo-db');
 const { passport, authenticateSocket } = require('./auth');
 
 const PORT = 3001;
@@ -19,6 +19,9 @@ app.use(express.json());
 app.use('/', routes);
 
 app.use(passport.initialize());
+
+// If tables are missing create them
+initializeTables();
 
 const server = http.createServer(app);
 const io = socketIO(server, {
