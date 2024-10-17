@@ -14,7 +14,7 @@ const randomLetter = () => {
   return {
     letter: letterFrequency[Math.floor(Math.random() * letterFrequency.length)],
     key: keyGen(),
-    effect: [],
+    effect: {},
   };
 };
 
