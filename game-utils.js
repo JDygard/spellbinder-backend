@@ -1,6 +1,5 @@
 const letterFrequency = "EEEEEEEEEEEEEEEEEAAAAAAAAIIIIIIINNNNNNNOOOOOOTTTTTTTRRRRRRSSSSSLLLLLCCCCCUUUUDMMMMPHFFBBGYWKVJXQZ";
 
-
 let key = 0;
 const keyGenerator = () => {
   console.log("keyGenerator key:", key)
