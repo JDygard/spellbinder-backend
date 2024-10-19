@@ -9,6 +9,10 @@ const {
   JWT_SECRET,
 } = process.env;
 
+if (!JWT_SECRET) {
+  console.error('JWT_SECRET is not defined. Please check your .env file.');
+}
+
 passport.use(
   new LocalStrategy(async (username, password, done) => {
     try {

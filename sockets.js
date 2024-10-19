@@ -249,6 +249,7 @@ const setupSocket = (io, authenticateSocket) => {
 
         // USER DATA EXCHANGE =======================================================
         socket.on("requestPlayerData", () => {
+            console.log("requestPlayerData");
             socket.emit("playerData", { playerData: fakePlayerData });
         });
         // USER DATA EXCHANGE END ===================================================
