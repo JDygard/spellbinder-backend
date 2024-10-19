@@ -72,15 +72,16 @@ const monsters = require('./data/monsters');
 const { use } = require('passport');
 
 class User {
-    constructor(id, username, socket, currentCharacter = null, gameState = null, inMatch = false, board = [], combos = []) {
+    constructor(id, username, socket, currentCharacter = null, gameState = null, inMatch = false, board = [], combos = [], characters = []) {
         this.id = id;
         this.username = username;
         this.socket = socket;
         this.currentCharacter = currentCharacter;
-        this.gameState = gameState; // Initialize gameState and comboGameLog here
+        this.gameState = gameState;
         this.inMatch = inMatch;
         this.board = board;
         this.combos = combos;
+        this.characters = characters;
     }
 }
 
@@ -249,8 +250,16 @@ const setupSocket = (io, authenticateSocket) => {
 
         // USER DATA EXCHANGE =======================================================
         socket.on("requestPlayerData", () => {
-            console.log("requestPlayerData");
-            socket.emit("playerData", { playerData: fakePlayerData });
+            const user = findUserById(socket.id);
+            if (user) {
+                socket.emit("playerData", {
+                    id: user.id,
+                    username: user.username,
+                    characters: user.characters,
+                });
+            } else {
+                socket.emit("error", "User not found");
+            }
         });
         // USER DATA EXCHANGE END ===================================================
 
@@ -294,8 +303,19 @@ const setupSocket = (io, authenticateSocket) => {
             socket.emit('characters', characters);
         });
 
-        socket.on('createCharacter', (characterData) => {
-            createCharacter(socket.user.username, characterData);
+        socket.on('createCharacter', async (characterData) => {
+            try {
+                const newCharacter = await createCharacter(socket.user.username, characterData);
+                const user = findUserById(socket.id);
+                if (user) {
+                    user.characters.push(newCharacter); // Add new character to user's characters array
+                    updateUser(socket.id, { characters: user.characters });
+                    socket.emit('characterCreated', newCharacter);
+                }
+            } catch (error) {
+                console.error('Error creating character:', error);
+                socket.emit('error', 'Error creating character');
+            }
         });
         // CHARACTER SELECT SCREEN END ==============================================
 

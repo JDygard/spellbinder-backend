@@ -1,8 +1,8 @@
 const { DynamoDBClient, CreateTableCommand } = require('@aws-sdk/client-dynamodb');
-const { 
-  DynamoDBDocumentClient, 
-  PutCommand, 
-  QueryCommand 
+const {
+  DynamoDBDocumentClient,
+  PutCommand,
+  QueryCommand
 } = require('@aws-sdk/lib-dynamodb');
 
 const dotenv = require('dotenv');
@@ -145,6 +145,7 @@ const createUser = async (userData) => {
       id: new Date().getTime().toString(),
       username: userData.username,
       password: hashedPassword,
+      characters: [],
     },
   };
 
