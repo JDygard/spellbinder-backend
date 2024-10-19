@@ -1,6 +1,5 @@
 const letterFrequency = "EEEEEEEEEEEEEEEEEAAAAAAAAIIIIIIINNNNNNNOOOOOOTTTTTTTRRRRRRSSSSSLLLLLCCCCCUUUUDMMMMPHFFBBGYWKVJXQZ";
 
-
 let key = 0;
 const keyGenerator = () => {
   console.log("keyGenerator key:", key)
@@ -14,7 +13,7 @@ const randomLetter = () => {
   return {
     letter: letterFrequency[Math.floor(Math.random() * letterFrequency.length)],
     key: keyGen(),
-    effect: [],
+    effect: {},
   };
 };
 

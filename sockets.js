@@ -1,68 +1,3 @@
-const itemId = 0;
-const fakePlayerData = [
-    {
-        id: 1,
-        name: "Zoltan",
-        level: 1,
-        hp: 100,
-        maxHp: 100,
-        experience: 0,
-        class: "warrior",
-        talentPoints: 0,
-        talents: {
-            class: {},
-            generic: {},
-        },
-        stats: {
-            strength: 10,
-            dexterity: 10,
-            intelligence: 10,
-        },
-        inventory: {
-            weapon: itemId,
-            armor: itemId,
-            trinket: itemId,
-            helmet: itemId,
-            inventory: [
-                itemId,
-                itemId,
-                itemId,
-                itemId,
-                itemId,
-                itemId,
-                itemId,
-                itemId,
-                itemId,
-                itemId,
-            ],
-        },
-        combos: [
-            {
-                id: 1,
-                name: "Quick Healer",
-                sequence: [3, 4],
-                timeLimit: 10,
-                effect: {
-                    type: 'heal',
-                    value: 20,
-                },
-            },
-            {
-                id: 2,
-                name: "Damage Boost",
-                sequence: [5, 5],
-                timeLimit: 15,
-                effect: {
-                    type: 'damageMultiplier',
-                    value: 2,
-                    duration: 10,
-                },
-            },
-        ],
-    },
-];
-
-
 const { generateBoard, randomLetter, validateWord, letterRarity } = require('./game-utils');
 const { getCharactersByUsername, createCharacter } = require('./dynamo-db');
 const { authenticateSocket } = require('./auth');
@@ -76,6 +11,7 @@ class User {
         this.id = id;
         this.username = username;
         this.socket = socket;
+        this.characters = characters;
         this.currentCharacter = currentCharacter;
         this.gameState = gameState;
         this.inMatch = inMatch;
@@ -93,6 +29,7 @@ let matchmakingQueue = [];
 const findUserById = (id) => users.find((user) => user.id === id);
 
 const addUser = (user) => {
+    console.log("user added", user)
     users.push(user);
 };
 
@@ -106,6 +43,46 @@ const updateUser = (id, data) => {
         users[userIndex] = { ...users[userIndex], ...data };
     }
 };
+
+
+function generateNewCharacter(characterData) {
+    const { name, classType, username } = characterData;
+
+    const baseStats = {
+        hp: 100,
+        maxHp: 100,
+        strength: 10,
+        dexterity: 10,
+        intelligence: 10,
+    };
+
+    return {
+        name: name,
+        username: username,
+        level: 1,
+        class: classType,
+        hp: baseStats.hp,
+        maxHp: baseStats.maxHp,
+        experience: 0,
+        stats: {
+            strength: baseStats.strength,
+            dexterity: baseStats.dexterity,
+            intelligence: baseStats.intelligence,
+        },
+        inventory: {
+            weapon: null,
+            armor: null,
+            trinket: null,
+            helmet: null,
+            inventory: [],
+        },
+        talents: {
+            class: {},
+            generic: {},
+        },
+        combos: [],
+    };
+}
 
 const addToMatchmakingQueue = (user) => {
     matchmakingQueue.push(user);
@@ -123,6 +100,7 @@ function checkForCombos(user) {
     const validWordEntries = user.gameState.comboGameLog;
 
     // Iterate through the user's combos
+    console.log("combos: " + user.combos)
     for (const combo of user.combos) {
         let comboIndex = 0;
         let comboStartTime = null;
@@ -194,7 +172,6 @@ function applyComboEffect(user, combo) {
             break;
 
         case 'applyStatusEffect':
-            // Assuming there's a function applyStatusEffect that handles applying status effects
             applyStatusEffect(user, effect.statusEffect, effect.duration);
             break;
 
@@ -208,6 +185,12 @@ function applyComboEffect(user, combo) {
 
 
 // TILE EFFECTS START ========================================
+const LIGHTNING_TILE_DAMAGE = 3;
+const POISON_TILE_DAMAGE = 5;
+const BOMB_TILE_DAMAGE = 20;
+const BURN_TILE_DAMAGE = 10;
+const FIRE_TILE_DAMAGE = 3;
+
 function applyTileEffectToNewLetter(tileEffects, newLetter) {
     if (tileEffects.length > 0) {
         const effect = tileEffects.shift(); // Remove the least recently added effect
@@ -217,28 +200,103 @@ function applyTileEffectToNewLetter(tileEffects, newLetter) {
 }
 
 function handleTileDuration(user) {
-    // Reduce every tile's duration by 1 and remove the effect if the duration is 1
     user.board = user.board.map((row) => {
         return row.map((letterObj) => {
-            if (letterObj.effect.duration > 1) {
-                letterObj.effect.duration--;
+            if (letterObj.effect && letterObj.effect.duration > 0) {
+                letterObj.effect.duration -= 1;
 
-            } else {
-                letterObj.effect = [];
+                if (letterObj.effect.type === 'bomb' && letterObj.effect.duration < 1) {
+                    user.gameState.playerHp -= BOMB_TILE_DAMAGE;
+                    user.gameState.gameLog.push({
+                        type: 'bombExplosion',
+                        damage: BOMB_TILE_DAMAGE,
+                        submittedAt: Date.now(),
+                    });
+                    letterObj.effect = {};
+                } else if (letterObj.effect.duration < 1) {
+                    letterObj.effect = {};
+                }
             }
             return letterObj;
         });
     });
-
-    // Reduce every tile effect's duration by 1 and remove the effect if the duration is 1
-    user.gameState.tileEffects = user.gameState.tileEffects
-        .map((effect) => {
-            effect.duration--;
-            return effect;
-        })
-        .filter((effect) => effect.duration > 0);
 }
+
+// TILE SPECIFIC EFFECTS ========================================
+function applyLightningEffect(user, numberOfTiles) {
+    const availableTiles = [];
+    user.board.forEach((row, rowIndex) => {
+        row.forEach((letterObj, colIndex) => {
+            if (!letterObj.effect) {
+                availableTiles.push({ row: rowIndex, col: colIndex });
+            }
+        });
+    });
+
+    for (let i = 0; i < numberOfTiles; i++) {
+        if (availableTiles.length > 0) {
+            const randomIndex = Math.floor(Math.random() * availableTiles.length);
+            const { row, col } = availableTiles[randomIndex];
+            user.board[row][col].effect = {
+                type: 'lightning',
+                damage: LIGHTNING_TILE_DAMAGE,
+            };
+            availableTiles.splice(randomIndex, 1);
+        }
+    }
+}
+
+function calculateLightningTileDamage(letters) {
+    let lightningTileDamage = 0;
+    letters.forEach((letterObj) => {
+        if (letterObj.effect && letterObj.effect.type === 'lightning') {
+            lightningTileDamage += LIGHTNING_TILE_DAMAGE;
+        }
+    });
+    return lightningTileDamage;
+}
+
+function calculateBurnTileDamage(letters) {
+    const burnTileCount = letters.filter((letterObj) => letterObj.effect.type === 'burn').length;
+    return burnTileCount * BURN_TILE_DAMAGE;
+}
+
+function calculateFireTileDamage(letters) {
+    let fireTileCount = 0;
+
+    for (let letterObj of letters) {
+        if (letterObj.effect && letterObj.effect.type === 'fire') {
+            fireTileCount++;
+        }
+    }
+
+    return FIRE_TILE_DAMAGE * fireTileCount;
+}
+
+function calculatePoisonTileDamage(board) {
+    let poisonTileCount = 0;
+
+    for (const row of board) {
+        for (const letterObj of row) {
+            if (letterObj.effect && letterObj.effect.type === 'poison') {
+                poisonTileCount++;
+            }
+        }
+    }
+
+    return POISON_TILE_DAMAGE * poisonTileCount;
+}
+
+// TILE SPECIFIC EFFECTS END ========================================
+
 // TILE EFFECTS END ========================================
+
+async function initializeUser(socket) {
+    const userCharacters = await getCharactersByUsername(socket.user.username);
+    const newUser = new User(socket.id, socket.user.username, socket, userCharacters, null, null, false, [], []);
+    addUser(newUser);
+    return newUser;
+}
 
 const setupSocket = (io, authenticateSocket) => {
     io.use(authenticateSocket).on('connection', (socket) => {
@@ -272,28 +330,34 @@ const setupSocket = (io, authenticateSocket) => {
 
         socket.on('challengeSelected', (challengeId) => {
             const challenge = challenges.find((c) => c.id === parseInt(challengeId));
+            const user = findUserById(socket.id);
+        
+            if (!user.currentCharacter) {
+                socket.emit('error', { message: "No character selected" });
+                return;
+            }
+        
             if (challenge) {
-                const user = findUserById(socket.id);
                 const firstMonster = getFirstMonsterInChallenge(challenge);
                 const gameState = {
                     monster: firstMonster,
-                    playerHp: fakePlayerData[0].hp,
+                    playerHp: user.currentCharacter.hp, // This is where the error happens
                     monsterHp: firstMonster.hp,
-                    combos: fakePlayerData[0].combos,
+                    combos: user.currentCharacter.combos,
                     score: 0,
                     gameLog: [],
                     comboGameLog: [],
                     tileEffects: [],
                 };
                 updateUser(socket.id, { gameState: gameState });
-                let thisUser = findUserById(socket.id);
-                startMonsterAttacks(thisUser, firstMonster)
+                startMonsterAttacks(user, firstMonster);
                 socket.emit('startChallenge', firstMonster);
                 socket.emit("gameStateUpdate", user.gameState);
             } else {
                 console.log(`Challenge with ID ${challengeId} not found.`);
             }
         });
+        
         // PVE CHALLENGE SELECTION END ==============================================
 
 
@@ -353,6 +417,7 @@ const setupSocket = (io, authenticateSocket) => {
         socket.on('submitWord', async (data) => {
             const { word, letters } = data;
             const user = findUserById(socket.id);
+            
 
             // if word is less than 3 letters, return
             if (word.length < 3) {
@@ -371,26 +436,67 @@ const setupSocket = (io, authenticateSocket) => {
 
                 // WORD VALUE START =====================================================
                 let wordValue = 0;
-                let multiplier = 1;
-                let baseMultiplier = 1.5;
-
                 for (let letterObj of letters) {
-                    wordValue += letterRarity(letterObj.letter).value;
+                    wordValue += letterRarity(letterObj.letter).value * (1 + user.currentCharacter.stats.strength * 0.01);
                 }
 
-                if (letters.length >= 4) {
-                    multiplier = Math.pow(baseMultiplier, letters.length - 3);
+                const criticalChance = user.currentCharacter.stats.dexterity * 0.01;
+                if (Math.random() < criticalChance) {
+                    wordValue *= 2; // Double damage on critical hit
                 }
-                wordValue *= multiplier;
+
+
+
+                // Fire tile
+                const fireTileDamage = calculateFireTileDamage(letters);
+                wordValue += fireTileDamage;
+
+                // Poison tile
+                const poisonTileDamage = calculatePoisonTileDamage(user.board);
+                user.gameState.playerHp -= poisonTileDamage;
+
+                // Apply Int (multiplier for longer words)
+                let baseMultiplier = 1.5 + user.currentCharacter.stats.intelligence * 0.005;
+                if (letters.length >= 4) {
+                    wordValue *= Math.pow(baseMultiplier, letters.length - 3);
+                };
+                wordValue = Math.round(wordValue);
+
                 // WORD VALUE END =======================================================
 
-                // GAMESTATE START ======================================================
+                // GAMESTATE START ======================================================    
+                if (poisonTileDamage > 0) {
+                    user.gameState.gameLog.push({
+                        word: `Poison Damage:`,
+                        value: poisonTileDamage,
+                        color: "danger",
+                        submittedAt: Date.now(),
+                    });
+                }
+
+                const lightningTileDamage = calculateLightningTileDamage(letters);
+                user.gameState.playerHp -= lightningTileDamage;
+
+                if (lightningTileDamage > 0) {
+                    user.gameState.gameLog.push({
+                        type: 'lightningDamage',
+                        damage: lightningTileDamage,
+                        submittedAt: Date.now(),
+                    });
+                }
+
+                const burnTileDamage = calculateBurnTileDamage(letters);
+                user.gameState.health -= burnTileDamage;
+
                 user.gameState.monsterHp -= wordValue;
 
                 user.gameState.score += wordValue;
 
                 user.gameState.gameLog.push({
                     word,
+                    effects: letters
+                        .map((letterObj) => letterObj.effect)
+                        .filter((effect) => effect !== undefined && Object.keys(effect).length > 0),
                     value: wordValue,
                     color: "success",
                     length: word.length, // Add the word length
@@ -400,9 +506,9 @@ const setupSocket = (io, authenticateSocket) => {
 
                 // COMBOS START =========================================================
                 checkForCombos(user);
-                const validWordEntries = user.gameState.gameLog.filter(
-                    (entry) => entry.color === "success"
-                );
+                // const validWordEntries = user.gameState.gameLog.filter(
+                //     (entry) => entry.color === "success"
+                // );
                 // COMBOS END ===========================================================
 
                 // STATE UPDATES START ==================================================

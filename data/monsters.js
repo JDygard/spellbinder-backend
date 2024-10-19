@@ -70,47 +70,48 @@ const monsters = [
       "abilities": [
           {
             "name": "Gouging Stab",
-            "damage": 15,
+            "damage": 0,
             "effects": [
               {
-                "type": "bleed",
-                "duration": 10,
-                "damage": 5
-              },
-              {
-                "type": "poison",
-                "duration": 10,
-                "damage": 3
-              }
-            ]
-          },
-          {
-            "name": "Smoke Bomb",
-            "damage": 5,
-            "effects": [
-              {
-                "type": "blind",
-                "duration": 6,
+                "type": "stun",
+                "duration": 2,
                 "damage": 0
               }
             ]
           },
-          {
-            "name": "Fiery Arrow",
-            "damage": 20,
-            "effects": [
-              {
-                "type": "fire",
-                "duration": 2,
-                "damage": 10
-              },
-              {
-                "type": "burn",
-                "duration": 10,
-                "damage": 5
-              }
-            ]
-          }
+          // {
+          //   "name": "Smoke Bomb",
+          //   "damage": 5,
+          //   "effects": [
+          //     {
+          //       "type": "blind",
+          //       "duration": 6,
+          //       "damage": 0
+          //     }
+          //   ]
+          // },
+          // {
+          //   "name": "Fiery Arrow",
+          //   "damage": 20,
+          //   "effects": [
+          //     {
+          //       "type": "burn",
+          //       "duration": 10,
+          //       "damage": 5
+          //     }
+          //   ]
+          // },
+          // {
+          //   "name": "Bomb",
+          //   "damage": 0,
+          //   "effects": [
+          //     {
+          //       "type": "bomb",
+          //       "duration": 2,
+          //       "damage": 20
+          //     }
+          //   ]
+          // }
         ]
     }
   ];

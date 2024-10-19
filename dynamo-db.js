@@ -158,11 +158,12 @@ const createUser = async (userData) => {
   }
 };
 
-const createCharacter = async (username, characterData) => {
+const createCharacter = async (username, userId, characterData) => {
   const params = {
     TableName: CHARACTER_TABLE_NAME,
     Item: {
-      id: new Date().getTime().toString(),
+      characterId: new Date().getTime().toString(),
+      userId: userId,
       username: username,
       name: characterData.name,
       level: 1,
@@ -239,7 +240,7 @@ const getUserByUsername = async (username) => {
 
 const getCharactersByUsername = async (username) => {
   const params = {
-    TableName: CHARACTER_TABLE_NAME,
+    TableName: 'characters',
     IndexName: 'username-index',
     KeyConditionExpression: 'username = :u',
     ExpressionAttributeValues: {

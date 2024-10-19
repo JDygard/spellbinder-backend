@@ -47,8 +47,10 @@ const monsterAttack = (user, monster) => {
     user.gameState.playerHp -= damage;
 
     // Add the monster's ability effects to the gameState.tileEffects array
-    for (const effect in ability.effects) {
-        user.gameState.tileEffects.push(ability.effects[effect]);
+    for (const effect of ability.effects) {
+        // Create a deep copy of the effect object
+        const effectCopy = JSON.parse(JSON.stringify(effect));
+        user.gameState.tileEffects.push(effectCopy);
     }
 
     // Update the game log
