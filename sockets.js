@@ -308,9 +308,14 @@ const setupSocket = (io, authenticateSocket) => {
                 const newCharacter = await createCharacter(socket.user.username, characterData);
                 const user = findUserById(socket.id);
                 if (user) {
-                    user.characters.push(newCharacter); // Add new character to user's characters array
+                    user.characters.push(newCharacter);
                     updateUser(socket.id, { characters: user.characters });
-                    socket.emit('characterCreated', newCharacter);
+                    console.log(user.id, user.username, user.characters);
+                    socket.emit("playerData", {
+                        id: user.id,
+                        username: user.username,
+                        characters: user.characters,
+                    });
                 }
             } catch (error) {
                 console.error('Error creating character:', error);
