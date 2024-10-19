@@ -252,6 +252,7 @@ const setupSocket = (io, authenticateSocket) => {
         socket.on("requestPlayerData", () => {
             const user = findUserById(socket.id);
             if (user) {
+                console.log("emitting from requestPlayerData");
                 socket.emit("playerData", {
                     id: user.id,
                     username: user.username,
@@ -310,12 +311,9 @@ const setupSocket = (io, authenticateSocket) => {
                 if (user) {
                     user.characters.push(newCharacter);
                     updateUser(socket.id, { characters: user.characters });
-                    console.log(user.id, user.username, user.characters);
-                    socket.emit("playerData", {
-                        id: user.id,
-                        username: user.username,
-                        characters: user.characters,
-                    });
+                    socket.emit("updateCharacters", 
+                        user.characters,
+                    );
                 }
             } catch (error) {
                 console.error('Error creating character:', error);
